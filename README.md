@@ -53,6 +53,3 @@ CMPE272-Project/
 6. Administrators monitor expenses and generate reports.
 
 
-## Team
-
-**The Incredibles — CMPE 272, San José State University**
