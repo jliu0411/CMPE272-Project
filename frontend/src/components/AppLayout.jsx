@@ -48,7 +48,7 @@ export default function AppLayout() {
             Submit Expense
           </NavLink>
 
-          <NavLink to="/expenses">
+          <NavLink to="/expenses" end>
             <Receipt size={20} />
             Expense History
           </NavLink>

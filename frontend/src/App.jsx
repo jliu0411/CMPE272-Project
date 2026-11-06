@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Navigate,
@@ -12,7 +13,9 @@ import AppLayout from './components/AppLayout';
 
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import SubmitExpensePage from './pages/SubmitExpensePage';
 import PlaceholderPage from './pages/PlaceholderPage';
+import ExpenseHistoryPage from './pages/ExpenseHistoryPage';
 
 import './index.css';
 
@@ -22,34 +25,31 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {/* Public login page */}
-          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/login"
+            element={<LoginPage />}
+          />
 
           {/* Protected application pages */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
+
+              {/* Employee Dashboard */}
               <Route
                 path="/dashboard"
                 element={<DashboardPage />}
               />
 
+              {/* Submit Expense */}
               <Route
                 path="/expenses/new"
-                element={
-                  <PlaceholderPage
-                    title="Submit Expense"
-                    description="Create a reimbursement request."
-                  />
-                }
+                element={<SubmitExpensePage />}
               />
 
+              {/* Expense History */}
               <Route
                 path="/expenses"
-                element={
-                  <PlaceholderPage
-                    title="Expense History"
-                    description="View your submitted expenses."
-                  />
-                }
+                element={<ExpenseHistoryPage />}
               />
 
               {/* Manager and Admin pages */}
@@ -65,7 +65,7 @@ export default function App() {
                   element={
                     <PlaceholderPage
                       title="Expense Approvals"
-                      description="Review employee expense requests."
+                      description="Review and approve employee reimbursement requests."
                     />
                   }
                 />
@@ -74,7 +74,9 @@ export default function App() {
               {/* Admin-only page */}
               <Route
                 element={
-                  <ProtectedRoute allowedRoles={['admin']} />
+                  <ProtectedRoute
+                    allowedRoles={['admin']}
+                  />
                 }
               >
                 <Route
@@ -82,14 +84,16 @@ export default function App() {
                   element={
                     <PlaceholderPage
                       title="Administration"
-                      description="Manage users, policies, and reporting."
+                      description="Manage users, reimbursement policies, and reports."
                     />
                   }
                 />
               </Route>
+
             </Route>
           </Route>
 
+          {/* Redirect unknown URLs to dashboard */}
           <Route
             path="*"
             element={<Navigate to="/dashboard" replace />}
