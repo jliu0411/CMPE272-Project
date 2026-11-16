@@ -417,7 +417,7 @@ def get_expenses(user=Depends(current_user)):
 # Submit expense approval
 # --------------------------------------------------
 
-@app.post("/manager/approve")
+@app.post("/approve")
 def submit_decision_for_expense_approval(expense_id: str, decision: str, reason: str):
     timestamp = date.today().isoformat()
     expense = get_expense_by_id(expense_id)
