@@ -1,5 +1,6 @@
 
 import os
+import profile
 import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -410,4 +411,66 @@ def get_expenses(user=Depends(current_user)):
         raise HTTPException(
             status_code=500,
             detail="Unable to retrieve expense history",
+        )
+    
+# --------------------------------------------------
+# Submit expense approval
+# --------------------------------------------------
+
+@app.post("/manager/approve")
+def submit_decision_for_expense_approval(expense_id: str, decision: str, reason: str):
+    timestamp = date.today().isoformat()
+    expense = get_expense_by_id(expense_id)
+    manager_id = expense.get("assigned_manager_id")
+
+    try:
+        db.table("approvals").insert({
+            "expense_id": expense["id"],
+            "reviewer_id": manager_id,
+            "decision": decision,
+            "reason": reason,
+            "decided_at": timestamp,
+        }).execute()
+    except Exception:
+        raise HTTPException(
+            500,
+            "Unable to save expense",
+        )
+
+    try:
+        db.table("expenses").update({
+            "status": decision
+        }).eq("id", expense["id"]).execute()
+    except Exception:
+        raise HTTPException(
+            500,
+            "Unable to update expense status",
+        )
+
+    return {
+        "expense_id": expense["id"],
+        "status": expense["status"],
+        "message": "Expense decision submitted successfully",
+    }
+    
+def get_expense_by_id(id):
+    try:
+        result = (
+            db.table("expenses")
+            .select(
+                "id, employee_id, assigned_manager_id, "
+                "amount, currency, category, expense_date, "
+                "description, status, created_at"
+            )
+            .eq("id", id)
+            .single()
+            .execute()
+        )
+
+        return result.data
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve expense",
         )
