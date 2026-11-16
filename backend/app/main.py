@@ -1,6 +1,8 @@
 
+import logging
 import os
 import profile
+from typing import Literal
 import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -18,6 +20,8 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase import create_client
+from postgrest.exceptions import APIError
+from httpx import RequestError
 
 
 # --------------------------------------------------
@@ -36,6 +40,7 @@ if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
 db = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
 app = FastAPI(title="REMS API", version="0.1.0")
+logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -416,42 +421,145 @@ def get_expenses(user=Depends(current_user)):
 # --------------------------------------------------
 # Submit expense approval
 # --------------------------------------------------
-
 @app.post("/approve")
-def submit_decision_for_expense_approval(expense_id: str, decision: str, reason: str):
-    timestamp = date.today().isoformat()
-    expense = get_expense_by_id(expense_id)
-    manager_id = expense.get("assigned_manager_id")
+def submit_decision_for_expense_approval(
+    expense_id: uuid.UUID,
+    decision: Literal["approved", "rejected"],
+    reason: str | None = None,
+    user=Depends(current_user),
+):
+    expense_id = str(expense_id)
+    reviewer_id = str(user.id)
+    reason = (reason or "").strip() or None
+
+    if decision == "rejected" and reason is None:
+        raise HTTPException(422, "A rejection reason is required.")
 
     try:
-        db.table("approvals").insert({
-            "expense_id": expense["id"],
-            "reviewer_id": manager_id,
-            "decision": decision,
-            "reason": reason,
-            "decided_at": timestamp,
-        }).execute()
-    except Exception:
-        raise HTTPException(
-            500,
-            "Unable to save expense",
+        reviewers = (
+            db.table("profiles").select("role").eq("id", reviewer_id).limit(1).execute().data
         )
+        role = reviewers[0]["role"] if reviewers else None
+        if role not in ("manager", "admin"):
+            raise HTTPException(403, "Reviewer access is required.")
 
+        expenses = (
+            db.table("expenses")
+            .select("id, employee_id, assigned_manager_id, status")
+            .eq("id", expense_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not expenses:
+            raise HTTPException(404, "Expense not found.")
+
+        expense = expenses[0]
+        if expense["employee_id"] == reviewer_id or (
+            role == "manager" and expense["assigned_manager_id"] != reviewer_id
+        ):
+            raise HTTPException(403, "You cannot review this expense.")
+
+        if expense["status"] != "pending":
+            raise HTTPException(409, "This expense has already been reviewed.")
+
+        approvals = (
+            db.table("approvals")
+            .select("id, reviewer_id, decision, reason, decided_at")
+            .eq("expense_id", expense_id)
+            .limit(2)
+            .execute()
+            .data
+        )
+        if len(approvals) > 1:
+            raise HTTPException(409, "This expense has multiple existing approval records.")
+
+        if approvals:
+            approval = approvals[0]
+            if (
+                approval["reviewer_id"],
+                approval["decision"],
+                (approval["reason"] or "").strip() or None,
+            ) != (reviewer_id, decision, reason):
+                raise HTTPException(409, "A different decision is already saved.")
+        else:
+            # The existing primary key stops simultaneous inserts for the same expense.
+            approval_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"urn:rems:expense-approval:{expense_id}"))
+            inserted = (
+                db.table("approvals")
+                .upsert(
+                    {
+                        "id": approval_id,
+                        "expense_id": expense_id,
+                        "reviewer_id": reviewer_id,
+                        "decision": decision,
+                        "reason": reason,
+                    },
+                    on_conflict="id",
+                    ignore_duplicates=True,
+                    default_to_null=False,
+                )
+                .select("id, decided_at")
+                .execute()
+                .data
+            )
+            if not inserted:
+                raise HTTPException(409, "Another request already recorded a decision.")
+
+            approval = inserted[0]
+
+        decided_at = approval["decided_at"]
+        audit_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"urn:rems:approval-audit:{approval['id']}"))
+        db.table("audit_logs").upsert(
+            {
+                "id": audit_id,
+                "expense_id": expense_id,
+                "actor_id": reviewer_id,
+                "action": f"expense_{decision}",
+                "details": {"previous_status": "pending", "status": decision},
+                "created_at": decided_at,
+            },
+            on_conflict="id",
+            ignore_duplicates=True,
+            returning="minimal",
+        ).execute()
+
+        # An identical retry can complete the status update after an interrupted request.
+        update = (
+            db.table("expenses")
+            .update({"status": decision, "updated_at": decided_at})
+            .eq("id", expense_id)
+            .eq("status", "pending")
+        )
+        if role == "manager":
+            update = update.eq("assigned_manager_id", reviewer_id)
+
+        updated = update.select("id, status").execute().data
+        if not updated:
+            raise HTTPException(409, "The expense changed while you were reviewing it.")
+
+    except (APIError, RequestError) as exc:
+        logger.exception("Unable to save decision for expense %s", expense_id)
+        raise HTTPException(500, "Unable to save the decision. Retry with the same values.") from exc
+
+    return {
+        "expense_id": updated[0]["id"],
+        "approval_id": approval["id"],
+        "status": updated[0]["status"],
+        "decided_at": decided_at,
+        "message": "Expense decision submitted successfully",
+    }
+    
+def update_expense_status(expense_id: str, status: str):
     try:
         db.table("expenses").update({
-            "status": decision
-        }).eq("id", expense["id"]).execute()
+                    "status": status
+                }).eq("id", expense_id).execute()
     except Exception:
         raise HTTPException(
             500,
             "Unable to update expense status",
         )
-
-    return {
-        "expense_id": expense["id"],
-        "status": expense["status"],
-        "message": "Expense decision submitted successfully",
-    }
     
 def get_expense_by_id(id):
     try:
