@@ -550,35 +550,3 @@ def submit_decision_for_expense_approval(
         "message": "Expense decision submitted successfully",
     }
     
-def update_expense_status(expense_id: str, status: str):
-    try:
-        db.table("expenses").update({
-                    "status": status
-                }).eq("id", expense_id).execute()
-    except Exception:
-        raise HTTPException(
-            500,
-            "Unable to update expense status",
-        )
-    
-def get_expense_by_id(id):
-    try:
-        result = (
-            db.table("expenses")
-            .select(
-                "id, employee_id, assigned_manager_id, "
-                "amount, currency, category, expense_date, "
-                "description, status, created_at"
-            )
-            .eq("id", id)
-            .single()
-            .execute()
-        )
-
-        return result.data
-
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to retrieve expense",
-        )
