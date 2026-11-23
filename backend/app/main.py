@@ -288,6 +288,19 @@ def create_expense(
             "Unable to validate employee or reimbursement policy",
         )
 
+    matching_expenses = (
+        db.table("expenses")
+        .select("id")
+        .eq("employee_id", str(user.id))
+        .eq("expense_date", expense_date.isoformat())
+        .eq("amount", str(value))
+        .eq("currency", currency)
+        .limit(1)
+        .execute()
+    )
+
+    possible_duplicate = bool(matching_expenses.data)
+
     # 5. Save the expense
     try:
         expense_result = (
@@ -301,6 +314,7 @@ def create_expense(
                 "expense_date": expense_date.isoformat(),
                 "description": description,
                 "status": "pending",
+                "possible_duplicate": possible_duplicate,
             })
             .execute()
         )
@@ -311,11 +325,9 @@ def create_expense(
         expense = expense_result.data[0]
         expense_id = expense["id"]
 
-    except Exception:
-        raise HTTPException(
-            500,
-            "Unable to save expense",
-        )
+    except Exception as exc:
+        logger.exception("Expense lookup or insert failed")
+        raise HTTPException(500, "Unable to save expense") from exc
 
     # 6. Upload receipt and save metadata, if provided
     if receipt_data is not None:
