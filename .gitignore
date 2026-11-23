@@ -20,3 +20,6 @@ build/
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Local Netlify folder
+.netlify
