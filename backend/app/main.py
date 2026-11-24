@@ -258,7 +258,7 @@ def create_expense(
             db.table("policies")
             .select("max_amount, receipt_required")
             .eq("role", profile["role"])
-            .eq("category", category)
+            .ilike("category", category)
             .eq("active", True)
             .execute()
         )
@@ -268,16 +268,18 @@ def create_expense(
         if policies:
             policy = policies[0]
 
-            if value > Decimal(str(policy["max_amount"])):
+            max_amount = Decimal(str(policy["max_amount"]))
+
+            if value > max_amount:
                 raise HTTPException(
                     400,
-                    "Amount exceeds reimbursement policy limit",
+                    f"The reimbursement limit for {category} is {currency} {max_amount:,.2f} per expense.",
                 )
 
             if policy["receipt_required"] and receipt_data is None:
                 raise HTTPException(
                     400,
-                    "A receipt is required for this expense",
+                    f"Attach a receipt for {category} expenses.",
                 )
 
     except HTTPException:
