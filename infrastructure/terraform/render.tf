@@ -16,11 +16,11 @@ resource "render_web_service" "rems_api" {
 
   runtime_source = {
     native_runtime = {
-      runtime       = "python"
-      repo_url      = "https://github.com/jliu0411/CMPE272-Project"
-      branch        = "main"
-      build_command = "pip install -r requirements.txt"
-      auto_deploy   = true
+      runtime           = "python"
+      repo_url          = "https://github.com/jliu0411/CMPE272-Project"
+      branch            = "main"
+      build_command     = "pip install -r requirements.txt"
+      auto_deploy       = true
       health_check_path = "/health"
     }
   }

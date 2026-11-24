@@ -83,3 +83,4 @@ resource "netlify_environment_variable" "rems_frontend" {
     value   = each.value
   }]
 }
+
