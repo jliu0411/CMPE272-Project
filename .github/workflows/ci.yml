@@ -32,8 +32,8 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: https://rems-api-xa86.onrender.com
-          VITE_SUPABASE_URL: https://muywvgpltdfukmchefoz.supabase.co/
-          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_KZpgUbnCqT_1r7YHcteeMg_6DvScziV
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
   backend:
     name: Backend health check
@@ -52,11 +52,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install -r requirements.txt
-      - name: Start FastAPI and check GET /health
+      - name: Check GET /health with placeholder configuration
         env:
-          FRONTEND_URL: http://rems-front.netlify.app
-          SUPABASE_URL: https://muywvgpltdfukmchefoz.supabase.co/
-          SUPABASE_SECRET_KEY: ci-placeholder
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           python - <<'PY'
           from fastapi.testclient import TestClient
@@ -114,7 +113,9 @@ jobs:
 
   terraform-apply:
     name: Terraform plan and apply (Render then Netlify)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      vars.TF_CLOUD_ORGANIZATION != ''
     needs: [frontend, backend, terraform]
     runs-on: ubuntu-latest
     timeout-minutes: 40
