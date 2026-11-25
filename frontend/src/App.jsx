@@ -16,6 +16,7 @@ import DashboardPage from './pages/DashboardPage';
 import SubmitExpensePage from './pages/SubmitExpensePage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import ExpenseHistoryPage from './pages/ExpenseHistoryPage';
+import ManagerApprovalsPage from './pages/ManagerApprovalsPage';
 
 import './index.css';
 
@@ -62,12 +63,7 @@ export default function App() {
               >
                 <Route
                   path="/approvals"
-                  element={
-                    <PlaceholderPage
-                      title="Expense Approvals"
-                      description="Review and approve employee reimbursement requests."
-                    />
-                  }
+                  element={<ManagerApprovalsPage />}
                 />
               </Route>
 

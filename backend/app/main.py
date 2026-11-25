@@ -1,4 +1,4 @@
-
+from fastapi.responses import Response
 import logging
 import os
 import profile
@@ -435,6 +435,7 @@ def get_expenses(user=Depends(current_user)):
 # --------------------------------------------------
 # Submit expense approval
 # --------------------------------------------------
+
 @app.post("/approve")
 def submit_decision_for_expense_approval(
     expense_id: uuid.UUID,
@@ -564,3 +565,43 @@ def submit_decision_for_expense_approval(
         "message": "Expense decision submitted successfully",
     }
     
+@app.get("/receipts/{receipt_id}/view")
+def view_receipt(receipt_id: uuid.UUID, user=Depends(current_user)):
+    reviewer_id = str(user.id)
+
+    profiles = (
+        db.table("profiles")
+        .select("role")
+        .eq("id", reviewer_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not profiles or profiles[0]["role"] not in ("manager", "admin"):
+        raise HTTPException(403, "Reviewer access is required.")
+
+    receipts = (
+        db.table("receipts")
+        .select("storage_path, content_type, expenses!inner(assigned_manager_id)")
+        .eq("id", str(receipt_id))
+        .eq("expenses.assigned_manager_id", reviewer_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not receipts:
+        raise HTTPException(404, "Receipt not found for this reviewer.")
+
+    receipt = receipts[0]
+    content = db.storage.from_("expense-receipts").download(
+        receipt["storage_path"]
+    )
+    return Response(
+        content=content,
+        media_type=receipt["content_type"],
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
