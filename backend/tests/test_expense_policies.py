@@ -130,3 +130,44 @@ class ExpensePolicyTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201, response.text)
         self.expenses.insert.assert_called_once()
+
+    def test_rejects_negative_amount(self):
+        response = self.submit("-10.00", receipt=True)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"],
+            "Amount must be positive with at most two decimal places",
+        )
+
+
+    def test_rejects_invalid_category(self):
+        response = self.submit(
+            "25.00",
+            category="Invalid Category",
+            receipt=True,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"],
+            "Invalid expense category",
+        )
+
+
+    def test_rejects_future_expense_date(self):
+        response = self.client.post(
+            "/expenses",
+            data={
+                "amount": "25.00",
+                "category": "Meals",
+                "expense_date": "2099-01-01",
+                "description": "Future expense",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"],
+            "Expense date cannot be in the future",
+        )
